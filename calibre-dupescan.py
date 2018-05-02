@@ -39,6 +39,8 @@ def dir_entry_key(dir_entry):
 
 
 def dupescan(dir, depth):
+    if depth > args.d:
+        return
     books = []
     with os.scandir(dir) as entries:
         for dir_entry in sorted(entries, key=dir_entry_key):
@@ -61,6 +63,8 @@ if __name__ == '__main__':
                         help='Start quote string (default: ")')
     parser.add_argument('-qe', default='"',
                         help='End quote string (default: ")')
+    parser.add_argument('-d', type=int, default=3,
+                        help='Scan depth limit (default: 3)')
     parser.add_argument('-s', default='\t',
                         help='Separator string (default: Tabulator)')
     parser.add_argument('directory', nargs='+')
