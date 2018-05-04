@@ -1,0 +1,83 @@
+#!/usr/bin/env python3
+"""
+Scans Calibre libraries for duplicates by case insensitive comparison of
+subdirectory names ignoring numerical suffixes. Potential duplicates are
+printed in pairs of directory paths. Separators and quoting are configurable
+using options, so the output can be CSV or easily fed to utilities like 'awk'
+for further processing.
+"""
+__author__ = 'Ralph Seichter'
+
+import argparse
+import os
+import re
+
+book_dir_pat = re.compile(r'(.+)(\s+\(\d+\))$')
+
+
+class Book(object):
+
+    def __init__(self, path, title, suffix):
+        self.path = path
+        self.title = title
+        self.suffix = suffix
+
+    def __str__(self):
+        return 'Book: title="%s", suffix="%s", path="%s"' % (
+            self.title, self.suffix, self.path)
+
+
+def main():
+    parser = argparse.ArgumentParser(
+        description='Find duplicates in Calibre library directories.')
+    parser.add_argument('-qs', default='"',
+                        help='Start quote string (default: ")')
+    parser.add_argument('-qe', default='"',
+                        help='End quote string (default: ")')
+    parser.add_argument('-d', type=int, default=3,
+                        help='Scan depth limit (default: 3)')
+    parser.add_argument('-s', default='\t',
+                        help='Separator string (default: Tabulator)')
+    parser.add_argument('directory', nargs='+')
+    args = parser.parse_args()
+    for directory in args.directory:
+        dupescan(directory, 0, args)
+
+
+def dupescan(directory: str, depth: int, args):
+    if depth > args.d:
+        return
+    books = []
+    with os.scandir(directory) as entries:
+        for dir_entry in sorted(entries, key=cf_name):
+            if dir_entry.is_dir(follow_symlinks=False):
+                """
+                Calibre 'books' are directories. Individual formats of these
+                books are files. Dupe scan focuses on the directories only.
+                """
+                book = search_book(dir_entry)
+                if book:
+                    books.append(book)
+                dupescan(dir_entry.path, depth + 1, args)
+    for i in range(len(books) - 1):
+        book1 = books[i]
+        book2 = books[i + 1]
+        if book1.title.casefold() == book2.title.casefold():
+            print('%s%s%s%s%s%s%s' % (args.qs, book1.path,
+                                      args.qe, args.s, args.qs, book2.path,
+                                      args.qe))
+
+
+def cf_name(entry: os.DirEntry) -> str:
+    return entry.name.casefold()
+
+
+def search_book(entry: os.DirEntry) -> Book:
+    match = book_dir_pat.search(entry.name)
+    if match:
+        return Book(entry.path, match.group(1), match.group(2))
+    return None
+
+
+if __name__ == '__main__':
+    main()
